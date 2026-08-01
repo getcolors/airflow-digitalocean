@@ -12,9 +12,9 @@
 # Required for this project:
 #   digitalocean   COLORS_PAR_DO_TOKEN
 #   cloudflare     COLORS_PAR_CLOUDFLARE_API_TOKEN
-#   github         COLORS_PAR_GITHUB_TOKEN  (needs `repo` AND `workflow` scopes —
-#                  without `workflow`, seeding the deploy workflow fails as a
-#                  misleading 404 rather than a permission error)
+#   github         COLORS_PAR_GITHUB_TOKEN  (`repo` scope is enough — the seeded
+#                  deploy workflow is pushed over SSH with your own key, so no
+#                  `workflow` scope is needed on this token)
 #   resend         COLORS_PAR_RESEND_API_KEY COLORS_PAR_RESEND_PASSWORD
 #   r2 backend     COLORS_PAR_R2_ACCESS_KEY_ID COLORS_PAR_R2_SECRET_ACCESS_KEY
 #   wal-g          COLORS_PAR_WALG_R2_ACCESS_KEY_ID COLORS_PAR_WALG_R2_SECRET_ACCESS_KEY
