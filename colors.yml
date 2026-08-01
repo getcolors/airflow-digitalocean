@@ -1,0 +1,388 @@
+# Desired state for the airflow-digitalocean deployment. Non-secret values only.
+#
+# Found by walking up from the working directory, and the work directory the
+# launcher renders into is resolved next to this file rather than next to the
+# caller.
+#
+# Secrets are never written here: export them as COLORS_PAR_* from
+# .envrc.private and they are overlaid onto the matching flat key at run time.
+# The variable name is the key uppercased with hyphens as underscores, so
+# `walg-r2-bucket` would be overlaid by COLORS_PAR_WALG_R2_BUCKET.
+#
+# Required for this project:
+#   digitalocean   COLORS_PAR_DO_TOKEN
+#   cloudflare     COLORS_PAR_CLOUDFLARE_API_TOKEN
+#   github         COLORS_PAR_GITHUB_TOKEN
+#   resend         COLORS_PAR_RESEND_API_KEY COLORS_PAR_RESEND_PASSWORD
+#   r2 backend     COLORS_PAR_R2_ACCESS_KEY_ID COLORS_PAR_R2_SECRET_ACCESS_KEY
+#   wal-g          COLORS_PAR_WALG_R2_ACCESS_KEY_ID COLORS_PAR_WALG_R2_SECRET_ACCESS_KEY
+#   airflow        COLORS_PAR_POSTGRES_PASSWORD COLORS_PAR_AIRFLOW_FERNET_KEY
+#                  COLORS_PAR_AIRFLOW_ADMIN_PASSWORD
+#
+# A key that is absent is absent, and its block does not render. A key holding
+# REPLACE_ME is *present*, so the block renders the placeholder verbatim. That
+# is why required-but-unknown values below say REPLACE_ME and optional ones are
+# commented out rather than filled with a placeholder.
+
+# Names the work directory and the OpenTofu state keys. Keep it unique across
+# every project on this machine: combined with the stage name it is the only
+# thing separating this project's state from once-colors' and walter-oci's in
+# the shared bucket below.
+#
+# NEVER export COLORS_PAR_PROFILE. The overlay happens before any step runs, so
+# one variable in the wrong shell repoints this project at another package's
+# state. The launcher refuses to run when it is set.
+profile: airflow-digitalocean
+workdir: .colors
+
+provider-compute: digitalocean
+provider-dns: cloudflare
+provider-smtp: resend
+provider-backend: r2
+
+# The metadata database lives on this machine's disk, and a destroy takes it
+# with the droplet. WAL-G means that is recoverable rather than fatal, but
+# recovery is a documented manual procedure and not a verb — so the guard stays
+# on. Lift it for one intentional delete with
+# COLORS_PAR_COMPUTE_PREVENT_DESTROY=false rather than editing this.
+compute-prevent-destroy: true
+
+# --- airflow -----------------------------------------------------------------
+
+# The proxied A record, and the site address Caddy answers on. This is a public
+# hostname: anyone who resolves it reaches Caddy's basic_auth prompt, which is
+# why COLORS_PAR_AIRFLOW_ADMIN_PASSWORD is the credential that matters most in
+# this project.
+#
+# Its registrable domain must be a Cloudflare zone the API token can reach. The
+# reused ONCE DNS template manages zone-level settings as well as the record, so
+# this zone must NOT be one another Colors project already manages — two states
+# co-owning `cloudflare_zone_setting` is how a delete here strips settings from
+# a zone serving something else.
+#
+# `bigconfig.online` is clear: once-colors manages `getcolors.ai` and
+# `bigconfig.ai`, and a different TLD is a different Cloudflare zone. Note how
+# little separates this from `bigconfig.ai` when read quickly — that one IS
+# once-colors', and pointing this project at it is exactly the collision the
+# paragraph above exists to prevent.
+airflow-host: airflow.bigconfig.online
+
+# The web UI login. Only the username belongs here; the password is
+# COLORS_PAR_AIRFLOW_ADMIN_PASSWORD.
+#
+# These are CADDY's credentials, not Airflow's. Airflow 3 replaced the FAB auth
+# manager with SimpleAuthManager, which will not take a password from
+# configuration — it generates one into a `.generated` file at startup — so
+# setting an Airflow password would mean writing that file ourselves and
+# depending on its name. Instead Caddy holds a `basic_auth` line with a bcrypt
+# hash of the password, computed on the machine at play time so the hash never
+# reaches .colors/, and Airflow's api-server binds 127.0.0.1 where only Caddy
+# can reach it.
+#
+# The consequence, stated because it is a real limit rather than a detail: there
+# is no user model. One login for one operator, covering the REST API as well as
+# the UI. A second person means Cloudflare Access or FAB, not another row.
+airflow-admin-username: admin
+
+# Pinned rather than floating. An unpinned tag makes two creates months apart
+# different deployments, and an Airflow minor upgrade migrates the metadata
+# database — something to do deliberately, with a WAL-G base backup taken first.
+airflow-image: apache/airflow:3.1.3
+
+# --- tls ---------------------------------------------------------------------
+#
+# Caddy terminates TLS on the droplet and obtains its own certificate. That is
+# not optional decoration: the reused ONCE DNS template sets the zone to
+# `ssl = strict`, so Cloudflare validates the origin certificate rather than
+# accepting anything.
+#
+# It also holds the only credential a browser is asked for — see
+# `airflow-admin-username` above — and it is the only route to the api-server,
+# which publishes no port at all.
+
+# Pinned for the same reason `airflow-image` is, and with more force rather than
+# less: this is the one process on the machine facing the internet, so an
+# unpinned tag would make it the only unpinned thing on it.
+#
+# A container rather than Caddy's apt repository, which also lets it address the
+# api-server by service name over the compose network. That is what allows the
+# api-server to publish no port: there is then no second door onto Airflow, not
+# even one bound to localhost.
+caddy-image: caddy:2.11.4
+
+# Optional, and commented out rather than left as REPLACE_ME — the placeholder
+# would render verbatim into the Caddyfile as an address to register with Let's
+# Encrypt. Absent, Caddy still gets certificates; you simply get no expiry or
+# problem notices from the CA.
+#
+# caddy-acme-email: you@example.com
+
+# --- smtp --------------------------------------------------------------------
+#
+# ONCE's SMTP stages, reused whole. `tofu-smtp` creates one Resend sending
+# domain per zone, the DNS stage renders that domain's verification records
+# alongside the A record, and `tofu-smtp-post` verifies it once DNS is live.
+# That ordering is why the three stages cannot be collapsed.
+#
+# The zone comes from `airflow-host`, not from a key of its own — ONCE derives
+# it from the application hosts. So this project sends from
+# `notifications.bigconfig.online`, and the whole subdomain is created and
+# verified for you.
+#
+# Credentials are COLORS_PAR_RESEND_API_KEY (the provider) and
+# COLORS_PAR_RESEND_PASSWORD (the relay password). Resend's relay host, port and
+# username are not desired state: they are identical for every account and ONCE
+# hard-codes them.
+#
+# Set `provider-smtp: no-infra` instead to point at an existing relay, which
+# then needs `no-infra-smtp-server`, `no-infra-smtp-port`,
+# `no-infra-smtp-username` and COLORS_PAR_NO_INFRA_SMTP_PASSWORD.
+
+# The envelope sender for Airflow's alerts. It must sit under the Resend sending
+# domain above — a From address on the bare zone is not what gets verified, and
+# mail from it will be rejected.
+airflow-smtp-from: airflow@notifications.bigconfig.online
+
+# --- dags --------------------------------------------------------------------
+
+# owner/name. This repository is CREATED by the github stage if it does not
+# exist, seeded once with a workflow and a hello-world DAG, and never written to
+# again — a converge must not overwrite your DAGs with the seed. `delete`
+# revokes the deploy key and clears the environment; it does not delete this
+# repository.
+#
+# It is created private. DAGs carry business logic, and a public default is a
+# mistake you only make once.
+dags-repo: getcolors/airflow-dags
+
+# The write-only root the rrsync ForceCommand confines the deploy key to, and
+# the directory Airflow scans for DAGs. A leaked key can write here and do
+# nothing else — it needs no sudo at all, unlike ONCE's deploy key.
+dags-dest: /srv/airflow/dags
+
+# The branch the seeded workflow syncs from. `main` is what the github stage
+# creates the repository with, so this matches rather than assumes.
+dags-branch: main
+
+# --- digitalocean ------------------------------------------------------------
+#
+# Unlike once-colors and walter-oci this project shares no tenancy, subnet or
+# session with anything: it is on its own network, does not inherit the
+# production subnet's security list, and cannot reach the website server over
+# private IPs. For a public-facing host that is an improvement.
+#
+# `stop` and `start` do not work here. Walter implements the power verbs for OCI
+# only — membership is a fact about the provider's API, not its template — so on
+# DigitalOcean they report the provider cannot be power cycled and exit 0. This
+# droplet bills continuously; size it for what it must run, not for a peak you
+# can park overnight.
+digitalocean-name: airflow
+
+# Frankfurt, mirroring the region the other two projects run in. Nothing forces
+# it — no state or network is shared — so change it freely before the first
+# create. Afterwards the region forces replacement.
+digitalocean-region: fra1
+
+# Airflow's scheduler, API server and triggerer, plus a host Postgres. 4 GB is
+# the practical floor and this sits one step above it, because DAG parsing is
+# what runs out of memory first and it does so as import errors rather than as
+# an obvious OOM. Resizing a droplet's CPU and RAM is reversible; growing its
+# disk is not.
+#
+# `s-2vcpu-8gb` — the obvious spelling, and what this key said first — no longer
+# exists: DigitalOcean retired the plain slug and now sells the 2 vCPU / 8 GB
+# shared droplet only as CPU-specific variants. Verify a slug with
+# `doctl compute size list` before changing this, because an unavailable one
+# fails at apply rather than at build.
+#
+# 100 GB of disk for a metadata database whose backups live in R2 is ample. The
+# alternatives at the time of writing were s-2vcpu-8gb-160gb-intel and
+# s-4vcpu-8gb, both $48/mo; the second is the one to reach for if task
+# parallelism ever becomes the constraint, since LocalExecutor forks tasks from
+# the scheduler and vCPU is what bounds them.
+digitalocean-size: s-2vcpu-8gb-amd
+
+# LTS on purpose. This box runs a database that must survive unattended for
+# years, and an interim release reaches end of support in nine months.
+digitalocean-image: ubuntu-24-04-x64
+
+# The VPC the droplet joins, and the SSH keys DigitalOcean installs for the root
+# login OpenTofu hands to Ansible. Both are DigitalOcean-side identifiers rather
+# than key material — read them from the control panel or `doctl`.
+#
+# A DigitalOcean VPC is region-scoped, so this one has to live in
+# `digitalocean-region` above or the apply fails on a mismatch rather than on
+# anything that names the real cause. Confirm with `doctl vpcs list`.
+#
+# That is not a hypothetical: this key first held b6938e67-dc83-11e8-…, which is
+# `default-ams3`, against a `fra1` region. This is `default-fra1`.
+digitalocean-vpc-uuid: fa5ed7b5-326a-42ee-a9bf-9248ab0d12a2
+
+# Quoted because it is an opaque identifier rather than a number — unquoted it
+# parses as an integer, and this stack has a whole parity fixture about YAML
+# scalars that look like something they are not.
+#
+# ONCE's template interpolates this into a single-element list — `ssh_keys =
+# ["<value>"]` — so exactly one key is supported. A second one would need the
+# template changed, which is ONCE's file, not this package's.
+digitalocean-ssh-keys: "812184"
+
+# --- firewall ----------------------------------------------------------------
+#
+# DigitalOcean droplets sit on the public internet with no firewall unless one
+# is created, and ONCE's template does not create one — this is new HCL the
+# package has to add. Managing it in OpenTofu rather than with ufw on the box is
+# deliberate: a firewall configured only inside the machine is invisible to
+# `build` and to anyone reading desired state.
+digitalocean-firewall: true
+
+# Port 22, and it is open to the world on purpose rather than by omission. The
+# DAG sync is pushed from GitHub-hosted runners, whose addresses are drawn from
+# large ranges that change, so pinning this to your own address would break
+# every deploy. What actually protects the port is key-only authentication plus
+# the rrsync ForceCommand, which confines the deploy key to writing under
+# `dags-dest` and nothing else.
+#
+# Narrow it to GitHub's published ranges, or move CI to a self-hosted runner, if
+# you want this closed — both are real options, both add upkeep.
+digitalocean-ssh-sources:
+  - 0.0.0.0/0
+  - "::/0"
+
+# Ports 80 and 443. Open, because Cloudflare proxies from addresses that are
+# published but revised periodically.
+#
+# The available hardening is to allow only Cloudflare's ranges here, which would
+# stop anyone reaching the origin directly by IP and bypassing the proxy. It
+# costs a refresh whenever that list changes, and a stale list takes the site
+# down — so it is a deliberate trade rather than a free win.
+digitalocean-http-sources:
+  - 0.0.0.0/0
+  - "::/0"
+
+# --- postgres and wal-g ------------------------------------------------------
+#
+# Postgres runs on the host rather than in a container, because `archive_command`
+# has to invoke the wal-g binary in the same filesystem as the postgres process.
+# Containerising it would mean building and hosting a custom image, which is
+# infrastructure this stack does not have.
+#
+# Pinned rather than "whatever the distro ships". WAL-G backups are not portable
+# across Postgres major versions: a base backup taken on 16 cannot be restored
+# onto 17, so an unpinned version turns a distro upgrade into an unrestorable
+# archive. 16 is what Ubuntu 24.04 provides, so this pin costs nothing today and
+# is the whole safeguard later.
+#
+# Postgres comes from the PGDG apt repository rather than the distro's, which is
+# what makes the pin mean anything — Ubuntu 24.04 ships exactly one major
+# version, so against the distro package this key would be documentation.
+postgres-version: 16
+
+# The WAL-G release to install. There is no apt package for it, so the playbook
+# downloads the release asset, checks it against the .sha256 published beside it,
+# and installs the binary to /usr/local/bin/wal-g.
+#
+# Pinned for the same reason `airflow-image` is: an unpinned download makes two
+# creates months apart different deployments, and this particular binary is the
+# one that has to still understand the archive it wrote a year ago.
+#
+# Only the tag is desired state. The Ubuntu version and the architecture are read
+# from Ansible facts instead, because they are properties of the machine the
+# compute stage already chose — asking for them here is how they come to disagree
+# with it.
+walg-version: v3.0.8
+
+# Its own bucket, deliberately not the state bucket below. Retention and
+# lifecycle rules that are right for WAL are wrong for OpenTofu state, and these
+# credentials live on a public-facing box while the state credentials never
+# leave the workstation. Scope COLORS_PAR_WALG_R2_* to this bucket alone.
+walg-r2-bucket: postgres-backup
+
+# VERIFIED against the live bucket: `postgres-backup` answers at this endpoint
+# with COLORS_PAR_WALG_R2_* . It was inferred when first written — the endpoint
+# is account-scoped rather than bucket-scoped, so it was assumed to be the same
+# URL as `r2-endpoint` below — and the assumption held.
+#
+# The `.eu.` in the host is the EU jurisdiction endpoint. A bucket created
+# without a jurisdiction uses `https://<account-id>.r2.cloudflarestorage.com`
+# instead, so a future bucket created outside the EU jurisdiction needs a
+# different URL here. The R2 dashboard shows each bucket's S3 API endpoint
+# directly.
+walg-r2-endpoint: https://319271fed8bc6d2d9059362be1165f37.eu.r2.cloudflarestorage.com
+
+# R2 presents an S3 API with no meaningful region, and `auto` is what its
+# documentation specifies. Here rather than buried in the playbook because
+# WAL-G fails opaquely when the S3 client has no region at all.
+walg-r2-region: auto
+
+# When a base backup runs, as a systemd OnCalendar expression rather than a
+# crontab line. WAL archiving alone is NOT a restorable backup: WAL replays
+# forward from a base backup, so with no base there is nothing to replay onto.
+# This line is what makes the archive mean anything.
+#
+# Daily at 02:00. Raise the frequency if replaying a day of WAL is slower than
+# you would accept during a restore — that replay time, not the backup, is what
+# a recovery actually costs.
+#
+# No timezone suffix, so this follows the machine clock, which Ubuntu cloud
+# images leave on UTC. The timer is `Persistent=true`: a run missed because the
+# droplet was down fires once on boot instead of being skipped, which a crontab
+# entry would not do.
+walg-full-backup-oncalendar: "*-*-* 02:00:00"
+
+# Where a failed base backup reports to. The timer's service carries
+# `OnFailure=`, so a non-zero exit starts a notifier unit that mails this
+# address through the Resend relay with Python's smtplib — the same credential
+# Airflow already uses.
+#
+# Deliberately not cron's mail convention: that would need a local MTA on a box
+# whose whole mail story is an external relay, and it would deliver only as far
+# as a local spool nothing reads.
+#
+# KNOWN LIMIT, because it is the failure this design does not catch: OnFailure
+# fires when the backup RUNS and fails. A timer that never fires at all —
+# masked, disabled, or a unit that failed to install — produces no failure and
+# therefore no mail. Silence here means "no failures" and "no backups" alike.
+# `systemctl list-timers walg-basebackup.timer` is what distinguishes them, and
+# checking it belongs in whatever you use to remember such things.
+alerts-email: admin@bigconfig.online
+
+# How many base backups to keep. `wal-g delete retain FULL <n>` prunes older
+# ones and the WAL segments beneath them, so this also bounds what the bucket
+# costs. Seven days of daily backups.
+#
+# Retention is what limits how far back you can recover, so it is the number to
+# raise before you need it rather than after.
+walg-retain-full: 7
+
+# The freshness check, and the answer to the limitation noted above: a second
+# timer asks `wal-g backup-list` for the newest base backup and exits non-zero
+# when it is older than this. It alerts on ABSENCE, so a backup that silently
+# stopped happening is reported instead of merely not being reported.
+#
+# 30 rather than 24, from the arithmetic of a daily schedule: a backup starting
+# at 02:00 and taking an hour leaves the newest completed one about 25 hours old
+# just before its successor lands. 24 would page every morning. 30 leaves ~5
+# hours of slack, so a single missed run is caught the same day.
+#
+# It reports through the same `OnFailure=` notifier as the backup itself rather
+# than through Airflow, which was the earlier suggestion and is the weaker one:
+# a check that runs inside the thing it monitors goes quiet exactly when the
+# machine is unhealthy, and this way there is one alerting path to keep working
+# instead of two.
+#
+# What remains uncovered is small and worth naming: if the notifier breaks, or
+# this timer is itself masked, silence returns. Closing that last gap needs a
+# dead man's switch off the box — something external expecting a periodic
+# check-in and complaining when it stops. Out of scope here.
+walg-max-backup-age-hours: 30
+
+# --- state backend -----------------------------------------------------------
+#
+# The same bucket once-colors and walter-oci use. Safe because the state key is
+# <profile>/<stage>.tfstate and both halves differ: this writes
+# airflow-digitalocean/airflow-compute.tfstate, never walter-oci/... or
+# once-colors/... . Sharing the bucket is all that is shared — the compute
+# provider here is not even the same cloud.
+r2-bucket: tofu-state-319271fed8bc6d2d9059362be1165f37-eu
+r2-endpoint: https://319271fed8bc6d2d9059362be1165f37.eu.r2.cloudflarestorage.com

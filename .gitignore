@@ -1,0 +1,13 @@
+# Dotfiles are excluded by default and re-admitted one at a time, rather than
+# listing what to hide. The inversion is deliberate: the failure mode here is a
+# secret that was never named, and a default-deny list cannot forget one.
+#
+# .envrc.private holds every COLORS_PAR_* credential and is covered by the first
+# line. So is .colors/, the rendered work directory — generated output, never
+# source, and it carries resolved values from desired state.
+.*
+!.envrc
+!.gitignore
+!.agents
+!.claude
+node_modules/
