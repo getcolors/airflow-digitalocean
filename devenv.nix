@@ -9,6 +9,9 @@
 
   packages = [
     pkgs.babashka
+    # Red and Blue launchers are self-bootstrapping Bun and uv scripts.
+    pkgs.bun
+    pkgs.uv
     pkgs.jet
     pkgs.hcl2json
 

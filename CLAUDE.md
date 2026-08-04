@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Desired state for `airflow-digitalocean`: one Apache Airflow server on a
 DigitalOcean droplet, behind Cloudflare, with OpenTofu state in Cloudflare R2.
-**There is no source code here.** Six files are tracked:
+**There is no source code here.** The tracked desired state includes three interchangeable launchers:
 
 ```text
 colors.yml     the desired state — the only file you normally edit
-green          the installed launcher (a COPY of ../airflow's skill payload)
+green/red/blue the installed launchers (COPYs of ../airflow's skill payloads)
 .envrc         secret-free; sources the gitignored .envrc.private
 devenv.nix     the toolchain
 devenv.lock
@@ -21,7 +21,7 @@ Everything else is generated (`.colors/`) or secret (`.envrc.private`).
 `.gitignore` is `.*` with narrow negations, so check `git ls-files` rather than
 inferring what is tracked from the working tree.
 
-The behaviour lives in `../airflow` (the package) on `../once` and `../green`.
+The behaviour lives in `../airflow` on matching `../once` and SDK implementations (`../green`, `../red`, `../blue`).
 **Read `../airflow/CLAUDE.md` before reasoning about what a verb actually
 does** — the DAG, the stage list, the playbook's ordering constraints and the
 ONCE reuse surface are all documented there, not here.
@@ -29,9 +29,9 @@ ONCE reuse surface are all documented there, not here.
 ## Commands
 
 ```sh
-./green build              # render .colors/airflow-digitalocean/ — contacts no provider
-./green create --dry-run   # walk the DAG, skip every side effect
-./green create             # converge for real
+./green build              # Green, Red, and Blue are interchangeable
+./red create --dry-run     # all read the same colors.yml and remote state
+./blue create              # never run colours concurrently
 ./green delete             # guarded; see below
 ```
 
@@ -114,6 +114,8 @@ provenance this project never earned. After every `bb pin` in `../airflow`:
 
 ```sh
 cp ../airflow/skills/package-airflow-green/green green
+cp ../airflow/skills/package-airflow-red/red red
+cp ../airflow/skills/package-airflow-blue/blue blue
 ```
 
 Skip it and this project keeps running the old pin. Every `fix: re-copy the

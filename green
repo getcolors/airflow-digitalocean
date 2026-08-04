@@ -53,7 +53,7 @@
 ;; cannot resolve its own library says so rather than inventing a SHA or
 ;; silently falling back to whatever is lying around. `bb pin` refuses to stamp
 ;; a dirty or unpushed HEAD for the same reason.
-(def ^:private airflow-sha "61f2f4ce635a2ac5ec6f4052cd1c4b3c5a6b8121")
+(def ^:private airflow-sha "bb16cbe8341672f7a91bbb0d4de3663b982cda51")
 
 (def ^:private airflow-git-url "https://github.com/getcolors/airflow.git")
 (def ^:private once-git-url "https://github.com/getcolors/once.git")
@@ -72,7 +72,7 @@
 
 (def ^:private bootstrap-error
   (when (and (System/getProperty "babashka.version") (not resolved?))
-    (let [airflow (lib-coord "AIRFLOW_LIB_ROOT" airflow-git-url airflow-sha nil)
+    (let [airflow (lib-coord "AIRFLOW_LIB_ROOT" airflow-git-url airflow-sha "green")
           once (lib-coord "ONCE_LIB_ROOT" once-git-url nil "green")
           green (lib-coord "GREEN_LIB_ROOT" green-git-url nil nil)]
       (if-not airflow
