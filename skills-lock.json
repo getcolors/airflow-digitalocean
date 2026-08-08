@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "package-airflow-blue": {
+      "source": "getcolors/airflow",
+      "sourceType": "github",
+      "skillPath": "skills/package-airflow-blue/SKILL.md",
+      "computedHash": "b6d829327f99100906a5ae7867cec5edc12179ca8746dff172ab12dcd913a583"
+    },
+    "package-airflow-green": {
+      "source": "getcolors/airflow",
+      "sourceType": "github",
+      "skillPath": "skills/package-airflow-green/SKILL.md",
+      "computedHash": "4d6692c44d65aa61ea74e3df5ea00d16ff88693108f5dc06cf503a572c989e19"
+    },
+    "package-airflow-red": {
+      "source": "getcolors/airflow",
+      "sourceType": "github",
+      "skillPath": "skills/package-airflow-red/SKILL.md",
+      "computedHash": "d08e57a83b69407eb55bdff1b1ec4545f7a9d49aaa114f74a7644035c5430ea5"
+    }
+  }
+}

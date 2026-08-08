@@ -9,10 +9,12 @@ DigitalOcean droplet, behind Cloudflare, with OpenTofu state in Cloudflare R2.
 **There is no source code here.** The tracked desired state includes three interchangeable launchers:
 
 ```text
-colors.yml     the desired state — the only file you normally edit
-green/red/blue the installed launchers (COPYs of ../airflow's skill payloads)
-.envrc         secret-free; sources the gitignored .envrc.private
-devenv.nix     the toolchain
+colors.yml       the desired state — the only file you normally edit
+green/red/blue   the installed launchers (COPIES of the skill payloads)
+.agents/skills/  the three installed Package Skills
+skills-lock.json the installed sources and content hashes
+.envrc           secret-free; sources the gitignored .envrc.private
+devenv.nix       the toolchain
 devenv.lock
 .gitignore
 ```
@@ -107,15 +109,16 @@ on something that does not name the real cause (`doctl vpcs list`).
 
 **The root `green` is a copy of the payload, not a symlink** — despite what the
 comment in the file's own header says, which is the package repo's situation, not
-this one. It was copied by hand from `../airflow/skills/package-airflow-green/`,
-so there is deliberately no `skills-lock.json` and no `.agents/` — a lockfile
-records a hash an actual install computed, and hand-writing one would claim
-provenance this project never earned. After every `bb pin` in `../airflow`:
+this one. The three skills are now installed for real, so `skills-lock.json`
+records hashes an actual install computed rather than provenance claimed by
+hand. That is what makes the payload under `.agents/skills/` worth diffing the
+root launchers against. After every `bb pin` in `../airflow`:
 
 ```sh
-cp ../airflow/skills/package-airflow-green/green green
-cp ../airflow/skills/package-airflow-red/red red
-cp ../airflow/skills/package-airflow-blue/blue blue
+npx skills update -p -y
+cp .agents/skills/package-airflow-green/green green
+cp .agents/skills/package-airflow-red/red red
+cp .agents/skills/package-airflow-blue/blue blue
 ```
 
 Skip it and this project keeps running the old pin. Every `fix: re-copy the
