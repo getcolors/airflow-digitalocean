@@ -14,9 +14,9 @@ import { homedir } from "node:os";
 // directory, which would halt Bun's upward resolution of `package-airflow-red` and
 // break the development symlink at red/red.
 const PINS = {
-  "package-airflow-red": "github:getcolors/airflow#bb16cbe8341672f7a91bbb0d4de3663b982cda51",
-  "package-once-red": "github:getcolors/once#031b89ce31117d6c786123dc352d8b8fb27669e4",
-  "red": "github:getcolors/red#b434e37568b91228ef14c2271f6fbeea805ae7ae",
+  "package-airflow-red": "github:getcolors/airflow#d1d99882c7b9cc00699afa05e85c2cdf8ecfdad4",
+  "package-once-red": "github:getcolors/once#98d3cfa2c743b89a72bac0252c258f9edeedcad7",
+  "red": "github:getcolors/red#48076768e8954030904b7d966fe636c4c01592ce",
 };
 
 // PINS is the only source of versions, as green's inline SHAs and blue's PEP
