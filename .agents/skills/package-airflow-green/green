@@ -45,7 +45,7 @@
   "Minimum io.github.getcolors/airflow contract this launcher requires. Guarded
   at run time so a stale pin fails loudly instead of rendering templates from an
   older commit."
-  1)
+  2)
 
 ;; Managed by `bb pin` — do not edit by hand.
 ;;
@@ -53,7 +53,7 @@
 ;; cannot resolve its own library says so rather than inventing a SHA or
 ;; silently falling back to whatever is lying around. `bb pin` refuses to stamp
 ;; a dirty or unpushed HEAD for the same reason.
-(def ^:private airflow-sha "bb16cbe8341672f7a91bbb0d4de3663b982cda51")
+(def ^:private airflow-sha "0ee383b792d2e1e8d61ba9c8737d6cda4f436557")
 
 (def ^:private airflow-git-url "https://github.com/getcolors/airflow.git")
 (def ^:private once-git-url "https://github.com/getcolors/once.git")
