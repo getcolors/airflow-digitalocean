@@ -20,5 +20,6 @@ in temporary directories with a sanitized environment. Compute documents were
 present and rendered backend configuration contained no credentials. Offline
 builds do not establish live authentication, migrated state, or application health.
 
-The external provider key reference is preserved. Verify its matching local
-identity and make ssh-private-key-path explicit before live application access.
+The external provider key reference is preserved. Verify that the operator
+SSH agent can authenticate, or configure ssh-private-key-path when an explicit
+identity is needed, before live application access.
