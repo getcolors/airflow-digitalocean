@@ -1,6 +1,6 @@
 # Shared compute migration
 
-Installed `getcolors/airflow` revision `810ce9b2499a2d674956300f6dbe0ee9552a4a29`. Root launchers match the
+Installed `getcolors/airflow` revision `bb8c82bc44363adfeb1837b8a4cfa6d1ab924597`. Root launchers match the
 installed skill payloads from a verified Skills CLI installation.
 The existing lockfile records that installation.
 
@@ -23,3 +23,5 @@ builds do not establish live authentication, migrated state, or application heal
 The external provider key reference is preserved. Verify that the operator
 SSH agent can authenticate, or configure ssh-private-key-path when an explicit
 identity is needed, before live application access.
+
+Published lifecycle update: validated retired compute stops repeated delete before cleanup; DNS and SMTP finish before compute retirement. Credential and destruction guards remain enforced. Desired state is unchanged.
